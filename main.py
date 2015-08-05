@@ -3,7 +3,12 @@
 import wave_util
 import os
 import sys
+import numpy as np
+import random
 
+"""
+use this function to read measurement data from files in a folder, calculate various parameters of the individual waves, and write these parameters to file
+"""
 def zerodown_data(argv):
     # if a data directory is specified from the command line, use it
     if len(argv) > 1:
@@ -58,6 +63,29 @@ def zerodown_data(argv):
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ht10_data'), 'w') as f:
         [f.write(str(ht10[0]) + ',' + str(ht10[1]) + '\n') for ht10 in hht10]
 
+def synthetic(hsfile):
+    curpath = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(curpath,hsfile),'r') as f:
+        raw = f.read().split('\n')
+
+    sr = 0.5
+    data = [[float(r.split(',')[0]),float(r.split(',')[1])] for r in raw if r]
+
+    """
+    constants for spectrum and sea water level generation. we define them outside the loop to save some time
+    """
+    max_t = 3600                # maximum duration of time series
+    nyq_f = 1/(2*sr)            # nyquist frequency of spectra: highest frequency bin
+    del_f = 1.0/max_t           # interval between frequency bins
+    f = np.linspace(del_f,nyq_f,max_t)    # array containing all frequency bins
+    t = np.arange(0,max_t,sr)
+
+    for dat in data:
+        S = wave_util.spectrum(dat[0], dat[1], 0.5, f)
+        E = wave_util.ema(S, 0.5, f, t, del_f)
+        print E[:10]
+
 if __name__ == ('__main__'):
-    zerodown_data(sys.argv)
+    #zerodown_data(sys.argv)
+    synthetic('hts_data')
 

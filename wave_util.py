@@ -1,6 +1,7 @@
 #!/bin/python2
 import numpy as np
 import math
+import random
 
 """
 zerodown takes elevation data and its sampling ratio and computes values for individual wave height and period sorted descending by wave height. In addition it returns values for significant(1/3) and 1/10 individual wave height/period.
@@ -93,30 +94,38 @@ def lagrpol(x, y, n, xx):
 """
 generate jonswap spectrum
 """
-def spectrum(hs, ts, sr):
-    max_t = 3600        # maximum duration of time series
-    nyq_f = 1/(2*sr)    # nyquist frequency of spectra: highest frequency bin
-    num_f = max_t/sr    # number of frequency bins
-    f = np.linspace(0,nyq_f,num_f-1)    # array containing all frequency bins
-    S = []              # array for our output spectrum
+def spectrum(hs, ts, sr, f):
+    sp = []                      # array for our output spectrum
 
     # spectrum generator constants
-    gamma_1 = 3.3 
+    gamma_1 = 3.3
     beta_i = 0.0624*(1.094 - 0.01915*math.log10(gamma_1))/(0.230 + 0.0336*gamma_1 - (0.185/(1.9 + gamma_1)))
-    divtstp = 1 - 0.132*math.pow((gamma_1 + 0.2),-0.559)
-    divltfp = 2*math.pow(0.07,2)
-    divgtfp = 2*math.pow(0.09,2)
+    divtstp = 1 - 0.132*(gamma_1 + 0.2)**(-0.559)
+    divltfp = 2*0.07**2
+    divgtfp = 2*0.09**2
     tp = ts/divtstp
-    hssq = math.pow(hs,2)
-    tppow4 = math.pow(tp,-4)
+    hssq = hs**2
+    tppow4 = tp**(-4)
 
     fp = 1/tp
-    for i in range(len(f)-1):
+    for i in f:
         # two condition of sepctra depending on the value of fp
-        fi = f[i]
-        if fi<=fp:
-            S[i] = beta_i*hssq*tppow4*math.pow(fi,-5)*exp(-1.25*math.pow((fi*tp),-4))*math.pow(3.3,(exp(-math.pow((fi*tp - 1),2)/divltfp)))
+        if i <= fp:
+            sp.append(beta_i*hssq*tppow4*i**(-5)*math.exp(-1.25*(i*tp)**(-4))*gamma_1**(math.exp(-(i*tp - 1)**2)/divltfp))
         else:
-           S[i] = beta_i*hssq*tppow4*math.pow(fi,-5)*exp(-1.25*math.pow((fi*tp),-4))*math.pow(3.3,(exp(-math.pow((fi*tp - 1),2)/divgtfp)))
+            sp.append(beta_i*hssq*tppow4*i**(-5)*math.exp(-1.25*(i*tp)**(-4))*gamma_1**(math.exp(-(i*tp - 1)**2)/divgtfp))
 
-    return S
+    return sp
+
+"""
+sea water elevation generation from spectrum
+"""
+def ema(sp, sr, f, t, del_f):
+    eta = [0.0]*7200    # array containing our ouput
+    rand = random.seed()
+    pi2 = 2*math.pi
+    a = np.asarray(S,float)
+    a *= 2*del_f**0.5
+    for i in np.arange(len(t)):
+        eta[i] = sum((a[j]*math.cos(pi2*f[j]*t[i]+(random.random()*pi2))) for j in np.arange(len(f)))
+    
