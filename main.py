@@ -4,7 +4,6 @@ import wave_util
 import os
 import sys
 import numpy as np
-import random
 import math
 
 """
@@ -45,10 +44,11 @@ def zerodown_data(argv):
         raw = [r for r in raw[1:] if r]
         # retrieve elevation data
         data = [r.split(',')[1].replace('-\.','-0\.') for r in raw]
+        data = np.asarray(data, float)*0.01
         # zerodowncross
         mean, max, hts, ht10 = wave_util.zerodown(data, sr)
         # add to our hourly list
-        #print file, mean, max, hts, ht10
+        print file, hts
         hmean.append(mean)
         hmax.append(max)
         hhts.append(hts)
@@ -64,6 +64,10 @@ def zerodown_data(argv):
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ht10_data'), 'w') as f:
         [f.write(str(ht10[0]) + ',' + str(ht10[1]) + '\n') for ht10 in hht10]
 
+
+"""
+generates synthetic data from Hs.Ts pairs
+"""
 def synthetic(hsfile):
     curpath = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(curpath,hsfile),'r') as f:
@@ -99,16 +103,16 @@ def synthetic(hsfile):
     for dat in data:
         index += 1
         # generate spectrum
-        S = wave_util.spectrum(dat[0], dat[1], gamma_1, beta_i, divtstp, divltfp, divgtfp, f)
+        S = wave_util.spectrum(dat[0], dat[1], gamma_1, beta_i, divtstp, divltfp, divgtfp, max_t, f)
         # generate elevation data
         E = wave_util.ema(S, 0.5, del_f)
         # zerodowncross
         mean, max, hts, ht10 = wave_util.zerodown(E, sr)
         print index
+        print "Measurement [Hs,Ts]: " 
         print dat
+        print "Synthetic [Hs,Ts]:   "
         print hts
-        print max,mean
-        print E[:10]
         # add to our hourly list
         #print file, mean, max, hts, ht10
         hmean.append(mean)
@@ -126,7 +130,9 @@ def synthetic(hsfile):
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ht10_synt'), 'w') as f:
         [f.write(str(ht10[0]) + ',' + str(ht10[1]) + '\n') for ht10 in hht10]
 
+"""
+this is run first
+"""
 if __name__ == ('__main__'):
-    #zerodown_data(sys.argv)
+    zerodown_data(sys.argv)
     synthetic('hts_data')
-

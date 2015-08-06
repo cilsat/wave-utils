@@ -23,26 +23,23 @@ def zerodown(elevation, sampling_ratio):
 
     ht = []
 
-    # convert into numpy array
-    elevation = np.asarray(elevation, float)
-    # calculate mean sea level of data
-    msl = -np.mean(elevation)
+    # lagrange polynomial dimension
+    n = np.arange(2)
+
     # normalize elevation
-    elevation = np.add(elevation, msl)
+    elevation -= np.mean(elevation)
 
     # determine height and period of each individual wave
     for i in xrange(1,len(elevation)-1):
         # if elevation at current index is positive and elevation at the next index is negative
-        if elevation[i] >= 0 and elevation[i+1] < 0:
+        if elevation.item(i) >= 0 and elevation.item(i+1) < 0:
             # calculate the interpolated time of zero crossing
-            tz = lagrpol(elevation[i:i+2], xrange(i,i+2), 2, 0.0)
+            tz = lagrpol(elevation[i:i+2], np.arange(i,i+2), n, 0.0)
             # calculate period of current individual wave
             T = srd * (tz - tz_prev)
 
-            # slice elevation data to current individual wave
-            Z = elevation[i_prev:i]
             # calculate height of current individual wave
-            H = np.max(Z) - np.min(Z)
+            H = np.max(elevation[i_prev:i]) - np.min(elevation[i_prev:i])
 
             # append to our ouput array
             ht.append([H, T])
@@ -53,18 +50,30 @@ def zerodown(elevation, sampling_ratio):
 
     # sort descending and convert to numpy array
     ht.sort()
-    ht = ht[::-1]
+    ht[:] = ht[::-1]
     htsort = np.asarray(ht,float)
 
     # obtain mean, hs,ts and h10,t10 through running average pass
     n = len(htsort)
-    ns = n/3
     n10 = n/10
+    ns = n/3
+
+    """
+    a_10, a_s, a_r = np.split(htsort, [n10, ns])
+    """
+
+    ht10 = [np.mean(htsort[:n10,0]), np.mean(htsort[n10:,1])]
+    hts = [np.mean(htsort[:ns,0]), np.mean(htsort[:ns,1])]
+    mean = [np.mean(htsort[:,0]), np.mean(htsort[:,1])]
+    tmax = np.max(htsort[:,1])
+    max = [htsort[0,0], tmax]
+
+    """
     havg = 0
     tavg = 0
     for i in xrange(n):
-        havg += (htsort[i,0] - havg) / (i+1)
-        tavg += (htsort[i,1] - tavg) / (i+1)
+        havg += (htsort.item(i,0) - havg) / (i+1)
+        tavg += (htsort.item(i,1) - tavg) / (i+1)
         if i == n10:
             ht10 = [havg, tavg]
         if i == ns:
@@ -72,32 +81,33 @@ def zerodown(elevation, sampling_ratio):
 
     mean = [havg, tavg]
 
-    hmax = htsort[0,0]
     tmax = np.max(htsort[:,1])
-    max = [hmax, tmax]
+    max = [htsort.item(0,0), tmax]
+    """
 
     return (mean, max, hts, ht10)
+
 
 """
 lagrange interpolation
 """
 def lagrpol(x, y, n, xx):
     fx = 0.0
-    l = 1.0
 
-    for i in xrange(n):
+    for i in n:
         l = 1.0
-        for j in xrange(n):
+        for j in n:
             if j != i:
-                l *= (xx - x[j]) / (x[i] - x[j])
-        fx += l * y[i]
+                l *= (xx - x.item(j)) / (x.item(i) - x.item(j))
+        fx += l * y.item(i)
 
     return fx
+
 
 """
 generate jonswap spectrum
 """
-def spectrum(hs, ts, gamma_1, beta_i, divtstp, divltfp, divgtfp, f):
+def spectrum(hs, ts, gamma_1, beta_i, divtstp, divltfp, divgtfp, max_t, f):
     sp = []     # array for our output spectrum
 
     # spectrum generator constants
@@ -105,15 +115,28 @@ def spectrum(hs, ts, gamma_1, beta_i, divtstp, divltfp, divgtfp, f):
     hssq = hs**2
     tppow4 = tp**(-4)
 
-    fp = 1/tp
+    # vanilla implementation
+    """
+    fp = 1.0/tp
     for i in f:
         # two condition of sepctra depending on the value of fp
         if i <= fp:
             sp.append(beta_i*hssq*tppow4*i**(-5)*math.exp(-1.25*(i*tp)**(-4))*gamma_1**(math.exp(-((i*tp - 1)**2)/divltfp)))
         else:
             sp.append(beta_i*hssq*tppow4*i**(-5)*math.exp(-1.25*(i*tp)**(-4))*gamma_1**(math.exp(-((i*tp - 1)**2)/divgtfp)))
+    """
+
+    # calculate fp (frekeunsi pemisah) and figure out which frequency index it's closest to
+    fp = int(max_t/tp)
+    # split freqeuncy array into two separate subarrays at fp index
+    flt, fgt = np.split(f,[fp])
+
+    # calculate spectrum for each frequency subarray and combine them back: for frequencies less than fp (flt) use divltfp, otherwise (fgt) use divgtfp. in addition, use numexpr to parallelize non-array portions of the expression
+    sp.extend(ne.evaluate('beta_i*hssq*tppow4*flt**(-5)*exp(-1.25*(flt*tp)**(-4))*gamma_1**(exp(-((flt*tp - 1)**2)/divltfp))'))
+    sp.extend(ne.evaluate('beta_i*hssq*tppow4*fgt**(-5)*exp(-1.25*(fgt*tp)**(-4))*gamma_1**(exp(-((fgt*tp - 1)**2)/divgtfp))'))
 
     return sp
+
 
 """
 sea water elevation generation from spectrum
@@ -141,8 +164,11 @@ def ema(sp, sr, del_f):
     """
 
     # with vectorization: ~60x improvement a lot better
+    """
     #eta = np.sum((a*np.cos(pi2*(f*t*srd + nprand.random_sample(f.shape)))), 0)
+    """
 
+    # with FFT: ~6000x improvement (!!!)
     eta = npf.irfft(a * np.exp(1j * nprand.uniform(0, pi2, a.shape))) * a.size
 
     return eta
