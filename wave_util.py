@@ -1,14 +1,15 @@
 #!/bin/python2
 import numpy as np
+import numpy.random as nprand
 import math
-import random
 
 """
 zerodown takes elevation data and its sampling ratio and computes values for individual wave height and period sorted descending by wave height. In addition it returns values for significant(1/3) and 1/10 individual wave height/period.
 """
 def zerodown(elevation, sampling_ratio):
     # make no assumptions regarding the unit of time
-    time_length = len(elevation) * sampling_ratio
+    srd = 1.0/sampling_ratio
+    time_length = len(elevation) * srd
 
     # 
     iz = 0
@@ -34,7 +35,7 @@ def zerodown(elevation, sampling_ratio):
             # calculate the interpolated time of zero crossing
             tz = lagrpol(elevation[i:i+2], xrange(i,i+2), 2, 0.0)
             # calculate period of current individual wave
-            T = sampling_ratio * (tz - tz_prev)
+            T = srd * (tz - tz_prev)
 
             # slice elevation data to current individual wave
             Z = elevation[i_prev:i]
@@ -94,15 +95,10 @@ def lagrpol(x, y, n, xx):
 """
 generate jonswap spectrum
 """
-def spectrum(hs, ts, sr, f):
-    sp = []                      # array for our output spectrum
+def spectrum(hs, ts, gamma_1, beta_i, divtstp, divltfp, divgtfp, f):
+    sp = []     # array for our output spectrum
 
     # spectrum generator constants
-    gamma_1 = 3.3
-    beta_i = 0.0624*(1.094 - 0.01915*math.log10(gamma_1))/(0.230 + 0.0336*gamma_1 - (0.185/(1.9 + gamma_1)))
-    divtstp = 1 - 0.132*(gamma_1 + 0.2)**(-0.559)
-    divltfp = 2*0.07**2
-    divgtfp = 2*0.09**2
     tp = ts/divtstp
     hssq = hs**2
     tppow4 = tp**(-4)
@@ -111,9 +107,9 @@ def spectrum(hs, ts, sr, f):
     for i in f:
         # two condition of sepctra depending on the value of fp
         if i <= fp:
-            sp.append(beta_i*hssq*tppow4*i**(-5)*math.exp(-1.25*(i*tp)**(-4))*gamma_1**(math.exp(-(i*tp - 1)**2)/divltfp))
+            sp.append(beta_i*hssq*tppow4*i**(-5)*math.exp(-1.25*(i*tp)**(-4))*gamma_1**(math.exp(-((i*tp - 1)**2)/divltfp)))
         else:
-            sp.append(beta_i*hssq*tppow4*i**(-5)*math.exp(-1.25*(i*tp)**(-4))*gamma_1**(math.exp(-(i*tp - 1)**2)/divgtfp))
+            sp.append(beta_i*hssq*tppow4*i**(-5)*math.exp(-1.25*(i*tp)**(-4))*gamma_1**(math.exp(-((i*tp - 1)**2)/divgtfp)))
 
     return sp
 
@@ -121,11 +117,24 @@ def spectrum(hs, ts, sr, f):
 sea water elevation generation from spectrum
 """
 def ema(sp, sr, f, t, del_f):
-    eta = [0.0]*7200    # array containing our ouput
-    rand = random.seed()
     pi2 = 2*math.pi
-    a = np.asarray(S,float)
-    a *= 2*del_f**0.5
-    for i in np.arange(len(t)):
-        eta[i] = sum((a[j]*math.cos(pi2*f[j]*t[i]+(random.random()*pi2))) for j in np.arange(len(f)))
-    
+    a = (np.asarray(sp,float)*2*del_f)**0.5
+    srd = 1.0/sr
+
+    # vanilla implementation: slow as fuck!
+    """
+    eta = []
+    for i in t:
+        temp = 0.0
+        for j in xrange(len(f)):
+            temp += a[j] * math.cos(pi2*f[j]*t[i] + pi2*nprand.random_sample())
+        eta.append(temp)
+    """
+
+    # list comprehension: still slow!
+    #eta = [sum([a.item(j)*math.cos(pi2*(f.item(j)*i*srd + nprand.random_sample())) for j in xrange(len(f))]) for i in t]
+
+    # with vectorization: a lot better
+    eta = [np.sum(a*np.cos(pi2*(f*i*srd + nprand.random_sample(f.size)))) for i in t]
+
+    return eta
