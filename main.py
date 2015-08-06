@@ -79,7 +79,8 @@ def synthetic(hsfile):
     nyq_f = sr/2                # nyquist frequency of spectra: highest frequency bin
     del_f = 1.0/max_t           # interval between frequency bins
     f = np.linspace(del_f,nyq_f,max_t)    # array containing all frequency bins
-    t = xrange(max_t*sr)
+    t = np.linspace(0,max_t,max_t*sr)
+    #t = np.reshape(t, (t.size,1))
 
     # spectrum generator constants
     gamma_1 = 3.3
@@ -95,7 +96,7 @@ def synthetic(hsfile):
     hht10 = []
 
     index = 0
-    for dat in data:
+    for dat in data[:10]:
         index += 1
         # generate spectrum
         S = wave_util.spectrum(dat[0], dat[1], gamma_1, beta_i, divtstp, divltfp, divgtfp, f)

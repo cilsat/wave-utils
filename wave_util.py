@@ -1,6 +1,7 @@
 #!/bin/python2
 import numpy as np
 import numpy.random as nprand
+import numexpr as ne
 import math
 
 """
@@ -118,8 +119,13 @@ sea water elevation generation from spectrum
 """
 def ema(sp, sr, f, t, del_f):
     pi2 = 2*math.pi
-    a = (np.asarray(sp,float)*2*del_f)**0.5
     srd = 1.0/sr
+
+    # vectorize spectrum and weigh
+    f = f.reshape((f.size, 1))
+    a = (np.asarray(sp,float)*2*del_f)**0.5
+    a = a.reshape(f.shape)
+    t = t.reshape((1, t.size))
 
     # vanilla implementation: slow as fuck!
     """
@@ -131,10 +137,12 @@ def ema(sp, sr, f, t, del_f):
         eta.append(temp)
     """
 
-    # list comprehension: still slow!
-    #eta = [sum([a.item(j)*math.cos(pi2*(f.item(j)*i*srd + nprand.random_sample())) for j in xrange(len(f))]) for i in t]
+    # list comprehension: x2 improvement still slow!
+    """
+    eta = [sum([a.item(j)*math.cos(pi2*(f.item(j)*i*srd + nprand.random_sample())) for j in xrange(len(f))]) for i in t]
+    """
 
-    # with vectorization: a lot better
-    eta = [np.sum(a*np.cos(pi2*(f*i*srd + nprand.random_sample(f.size)))) for i in t]
+    # with vectorization: ~60x improvement a lot better
+    eta = np.sum((a*np.cos(pi2*(f*t*srd + nprand.random_sample(f.shape)))), 0)
 
     return eta
