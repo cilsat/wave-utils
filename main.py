@@ -96,12 +96,12 @@ def synthetic(hsfile):
     hht10 = []
 
     index = 0
-    for dat in data[:10]:
+    for dat in data:
         index += 1
         # generate spectrum
         S = wave_util.spectrum(dat[0], dat[1], gamma_1, beta_i, divtstp, divltfp, divgtfp, f)
         # generate elevation data
-        E = wave_util.ema(S, 0.5, f, t, del_f)
+        E = wave_util.ema(S, 0.5, del_f)
         # zerodowncross
         mean, max, hts, ht10 = wave_util.zerodown(E, sr)
         print index

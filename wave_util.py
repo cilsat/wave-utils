@@ -1,6 +1,7 @@
 #!/bin/python2
 import numpy as np
 import numpy.random as nprand
+import numpy.fft as npf
 import numexpr as ne
 import math
 
@@ -117,15 +118,12 @@ def spectrum(hs, ts, gamma_1, beta_i, divtstp, divltfp, divgtfp, f):
 """
 sea water elevation generation from spectrum
 """
-def ema(sp, sr, f, t, del_f):
+def ema(sp, sr, del_f):
     pi2 = 2*math.pi
     srd = 1.0/sr
 
     # vectorize spectrum and weigh
-    f = f.reshape((f.size, 1))
     a = (np.asarray(sp,float)*2*del_f)**0.5
-    a = a.reshape(f.shape)
-    t = t.reshape((1, t.size))
 
     # vanilla implementation: slow as fuck!
     """
@@ -143,6 +141,8 @@ def ema(sp, sr, f, t, del_f):
     """
 
     # with vectorization: ~60x improvement a lot better
-    eta = np.sum((a*np.cos(pi2*(f*t*srd + nprand.random_sample(f.shape)))), 0)
+    #eta = np.sum((a*np.cos(pi2*(f*t*srd + nprand.random_sample(f.shape)))), 0)
+
+    eta = npf.irfft(a * np.exp(1j * nprand.uniform(0, pi2, a.shape))) * a.size
 
     return eta
