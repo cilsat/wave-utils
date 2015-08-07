@@ -49,8 +49,7 @@ def zerodown_data(datpath, sr):
     """
     The weakness to this approach is that individual waves spanning files are not identified (they could but it would be a hassle). It also means we need to handle border cases (zero-dimension matrices) in our zerodown function.
     """
-    for file in os.listdir(datpath):
-        #if file == '0065':
+    for file in sorted(os.listdir(datpath)):
         # read raw data from file
         with open(os.path.join(datpath, file), 'r') as f:
             raw = f.read().split('\n')
