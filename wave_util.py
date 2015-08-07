@@ -14,12 +14,11 @@ def zerodown(elevation, sampling_ratio):
     time_length = len(elevation) * srd
 
     # 
-    iz = 0
     i_prev = 0
 
     #
-    tz = 0.0
-    tz_prev = 0.0
+    t = 0.0
+    t_prev = 0.0
 
     ht = []
 
@@ -34,18 +33,17 @@ def zerodown(elevation, sampling_ratio):
         # if elevation at current index is positive and elevation at the next index is negative
         if elevation.item(i) >= 0 and elevation.item(i+1) < 0:
             # calculate the interpolated time of zero crossing
-            tz = lagrpol(elevation[i:i+2], np.arange(i,i+2), n, 0.0)
+            t = lagrpol(elevation[i:i+2], np.arange(i,i+2), n, 0.0)
             # calculate period of current individual wave
-            T = srd * (tz - tz_prev)
+            T = srd * (t - t_prev)
 
             # calculate height of current individual wave
-            H = np.max(elevation[i_prev:i]) - np.min(elevation[i_prev:i])
+            H = np.ptp(elevation[i_prev:i])
 
             # append to our ouput array
             ht.append([H, T])
 
-            iz += 1
-            tz_prev = tz
+            t_prev = t
             i_prev = i
 
     # sort descending and convert to numpy array
@@ -57,10 +55,6 @@ def zerodown(elevation, sampling_ratio):
     n = len(htsort)
     n10 = n/10
     ns = n/3
-
-    """
-    a_10, a_s, a_r = np.split(htsort, [n10, ns])
-    """
 
     ht10 = [np.mean(htsort[:n10,0]), np.mean(htsort[n10:,1])]
     hts = [np.mean(htsort[:ns,0]), np.mean(htsort[:ns,1])]
