@@ -37,11 +37,12 @@ def zerodown(elevation, sampling_ratio):
             # calculate period of current individual wave
             T = srd * (t - t_prev)
 
-            # calculate height of current individual wave
-            H = np.ptp(elevation[i_prev:i])
+            if T <= 30:
+                # calculate height of current individual wave
+                H = np.ptp(elevation[i_prev:i])
 
-            # append to our ouput array
-            ht.append([H, T])
+                # append to our ouput array
+                ht.append([H, T])
 
             t_prev = t
             i_prev = i
