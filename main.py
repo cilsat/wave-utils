@@ -24,10 +24,12 @@ def main(argv):
     else:
         sr = 2
 
+    """
     # zerodown all files in the data path
     dmean, dmax, dhts, dht10 = zerodown_data(datpath, sr)
     # write zerodown data to the specified files
     write('mean_data', 'max_data', 'hts_data', 'ht10_data', dmean, dmax, dhts, dht10)
+    """
 
     # generate synthetic data from specified measurement data file
     smean, smax, shts, sht10 = synthetic('hts_data', sr)
@@ -49,8 +51,7 @@ def zerodown_data(datpath, sr):
     """
     The weakness to this approach is that individual waves spanning files are not identified (they could but it would be a hassle). It also means we need to handle border cases (zero-dimension matrices) in our zerodown function.
     """
-    for file in os.listdir(datpath):
-        #if file == '0065':
+    for file in sorted(os.listdir(datpath)):
         # read raw data from file
         with open(os.path.join(datpath, file), 'r') as f:
             raw = f.read().split('\n')
@@ -74,7 +75,7 @@ def zerodown_data(datpath, sr):
 """
 generates synthetic data from Hs.Ts pairs
 """
-def synthetic(hsfile, sr):
+def synthetic(hsfile, spectrum, sr):
     curpath = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(curpath,hsfile),'r') as f:
         raw = f.read().split('\n')
@@ -91,13 +92,6 @@ def synthetic(hsfile, sr):
     t = np.linspace(0,max_t,max_t*sr)
     #t = np.reshape(t, (t.size,1))
 
-    # spectrum generator constants
-    gamma_1 = 3.3
-    beta_i = 0.0624*(1.094 - 0.01915*math.log(gamma_1))/(0.230 + 0.0336*gamma_1 - (0.185/(1.9 + gamma_1)))
-    divtstp = 1 - 0.132*(gamma_1 + 0.2)**(-0.559)
-    divltfp = 2*0.07**2
-    divgtfp = 2*0.09**2
-
     # lists of relevant hourly data
     hmean = []
     hmax = []
@@ -105,30 +99,127 @@ def synthetic(hsfile, sr):
     hht10 = []
 
     index = 0
-    for dat in data:
-        index += 1
-        # generate spectrum
-        S = wave_util.spectrum(dat[0], dat[1], gamma_1, beta_i, divtstp, divltfp, divgtfp, max_t, f)
-        # generate elevation data
-        E = wave_util.ema(S, 0.5, del_f)
-        # zerodowncross
-        mean, max, hts, ht10 = wave_util.zerodown(E, sr)
-        print index, dat, hts
-        """
-        print "Measurement [Hs,Ts]: " 
-        print dat
-        print "Synthetic [Hs,Ts]:   "
-        print hts
-        """
-        # add to our hourly list
-        #print file, mean, max, hts, ht10
-        hmean.append(mean)
-        hmax.append(max)
-        hhts.append(hts)
-        hht10.append(ht10)
+
+    # jonswap
+    if spectrum == 0:
+        for dat in data:
+            index += 1
+            # generate spectrum
+            S = wave_util.jonswap(dat[0], dat[1], 3600, f)
+            # generate elevation data
+            E = wave_util.ema(S, 0.5, del_f)
+            # zerodowncross
+            mean, max, hts, ht10 = wave_util.zerodown(E, sr)
+            print index, [dat[0] - hts[0], dat[1] - hts[1]]
+            # add to our hourly list
+            #print file, mean, max, hts, ht10
+            hmean.append(mean)
+            hmax.append(max)
+            hhts.append(hts)
+            hht10.append(ht10)
+
+    # wallops
+    elif spectrum == 1:
+        for dat in data:
+            index += 1
+            # generate spectrum
+            S = wave_util.wallops(dat[0], dat[1], 10.0, f)
+            # generate elevation data
+            E = wave_util.ema(S, 0.5, del_f)
+            # zerodowncross
+            mean, max, hts, ht10 = wave_util.zerodown(E, sr)
+            print index, [dat[0] - hts[0], dat[1] - hts[1]]
+            # add to our hourly list
+            #print file, mean, max, hts, ht10
+            hmean.append(mean)
+            hmax.append(max)
+            hhts.append(hts)
+            hht10.append(ht10)
+            
+    data[:] = np.asarray(data)
+    hhts[:] = np.asarray(hhts)
+    print np.mean(data), np.mean(hhts)
 
     return (hmean, hmax, hhts, hht10)
 
+"""
+generates synthetic data from Hs.Ts pairs
+"""
+def maximizem(sr):
+    curpath = os.path.dirname(os.path.abspath(__file__))
+
+    with open(os.path.join(curpath,'hts_data'),'r') as f:
+        hts_raw = f.read().split('\n')
+    dhts = [[float(r.split(',')[0]),float(r.split(',')[1])] for r in hts_raw if r]
+
+    with open(os.path.join(curpath,'mean_data'),'r') as f:
+        mean_raw = f.read().split('\n')
+    dmean = [[float(r.split(',')[0]),float(r.split(',')[1])] for r in mean_raw if r]
+
+    with open(os.path.join(curpath,'max_data'),'r') as f:
+        max_raw = f.read().split('\n')
+    dmax = [[float(r.split(',')[0]),float(r.split(',')[1])] for r in max_raw if r]
+
+    with open(os.path.join(curpath,'ht10_data'),'r') as f:
+        ht10_raw = f.read().split('\n')
+    dht10 = [[float(r.split(',')[0]),float(r.split(',')[1])] for r in ht10_raw if r]
+
+    """
+    constants for spectrum and sea water level generation. we define them outside the loop to save some time
+    """
+    max_t = 3600                # maximum duration of time series
+    nyq_f = sr/2                # nyquist frequency of spectra: highest frequency bin
+    del_f = 1.0/max_t           # interval between frequency bins
+    f = np.linspace(del_f,nyq_f,max_t)    # array containing all frequency bins
+    t = np.linspace(0,max_t,max_t*sr)
+    #t = np.reshape(t, (t.size,1))
+
+    # list of hourly error rates
+    emean = []
+    emax = []
+    ehts = []
+    eht10 = []
+
+    for m in xrange(2,10):
+        # lists of relevant hourly data
+        hmean = []
+        hmax = []
+        hhts = []
+        hht10 = []
+
+        index = 0
+        for dat in dhts:
+            index += 1
+            # generate spectrum
+            S = wave_util.wallops(dat[0], dat[1], m, f)
+            # generate elevation data
+            E = wave_util.ema(S, 0.5, del_f)
+            # zerodowncross
+            mean, max, hts, ht10 = wave_util.zerodown(E, sr)
+            print index, [dat[0] - hts[0], dat[1] - hts[1]]
+            # add to our hourly list
+            #print file, mean, max, hts, ht10
+            hmean.append(mean)
+            hmax.append(max)
+            hhts.append(hts)
+            hht10.append(ht10)
+
+        hhts[:] = np.asarray(hhts)
+        hmean[:] = np.asarray(hmean)
+        hmax[:] = np.asarray(hmax)
+        hht10[:] = np.asarray(hht10)
+
+        meandmean = np.mean(np.asarray(dmean))
+        meandmax = np.mean(np.asarray(dmax))
+        meandhts = np.mean(np.asarray(dhts))
+        meandht10 = np.mean(np.asarray(dht10))
+
+        emean.append((np.mean(hmean) - meandmean) / meandmean)
+        emax.append((np.mean(hmax) - meandmax) / meandmax)
+        ehts.append((np.mean(hhts) - meandhts) / meandhts)
+        eht10.append((np.mean(hht10) - meandht10) / meandht10)
+            
+    return emean, emax, ehts, eht10
 
 def write(fmean, fmax, fhts, fht10, hmean, hmax, hhts, hht10):
     # write results to file
