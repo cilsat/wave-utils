@@ -122,7 +122,7 @@ def ema(sp, sr, del_f):
     a = (np.asarray(sp,float)*2*del_f)**0.5
 
     # use inverse FFT to generate random phase time domain information from spectrum
-    eta = npf.irfft(a * np.exp(1j * nprand.uniform(0, pi2, a.shape))) * a.size
+    eta = np.irfft(a * np.exp(1j * nprand.uniform(0, pi2, a.shape))) * a.size
 
     return eta
 

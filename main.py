@@ -29,12 +29,13 @@ def main(argv):
     dmean, dmax, dhts, dht10 = zerodown_data(datpath, sr)
     # write zerodown data to the specified files
     write('mean_data', 'max_data', 'hts_data', 'ht10_data', dmean, dmax, dhts, dht10)
-    """
-
     # generate synthetic data from specified measurement data file
-    smean, smax, shts, sht10 = synthetic('hts_data', sr)
+    smean, smax, shts, sht10 = synthetic('hts_data', 0, sr)
     # write zerodown data to the specified output files
     write('mean_synt', 'max_synt', 'hts_synt', 'ht10_synt', smean, smax, shts, sht10)
+    """
+
+    hugefft(datpath, sr)
 
 
 """
@@ -220,6 +221,26 @@ def maximizem(sr):
         eht10.append((np.mean(hht10) - meandht10) / meandht10)
             
     return emean, emax, ehts, eht10
+
+def hugefft(datpath, sr):
+
+    files = sorted(os.listdir(datpath))
+    spec = np.empty((9))
+
+    for file in files:
+        with open(os.path.join(datpath, file), 'r') as f:
+            raw = f.read().split('\n')
+
+        # remove first line (header) and any empty lines
+        raw = [r for r in raw[1:] if r]
+        # retrieve elevation data and convert into meters
+        data = [r.split(',')[1].replace('-\.','-0\.') for r in raw]
+        data = np.asarray(data, float)*0.01
+
+        spec = np.append(spec, data) 
+        
+    spectrum = np.fft.rfft(spec)
+    spectrum.tofile(os.join.path(datpath, 'full-spectrum'), format="text")
 
 def write(fmean, fmax, fhts, fht10, hmean, hmax, hhts, hht10):
     # write results to file
