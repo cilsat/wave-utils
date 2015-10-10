@@ -222,12 +222,12 @@ def maximizem(sr):
             
     return emean, emax, ehts, eht10
 
-def hugefft(datpath, sr):
+def hugefft(datpath, sr, smoothing_factor=30):
+    import matplotlib.pyplot as plt
 
     files = sorted(os.listdir(datpath))
-    spec = np.empty((9))
-
-    for file in files:
+    allfft = []
+    for file in files[:-1]:
         with open(os.path.join(datpath, file), 'r') as f:
             raw = f.read().split('\n')
 
@@ -236,11 +236,19 @@ def hugefft(datpath, sr):
         # retrieve elevation data and convert into meters
         data = [r.split(',')[1].replace('-\.','-0\.') for r in raw]
         data = np.asarray(data, float)*0.01
-
-        spec = np.append(spec, data) 
+        allfft.append(np.abs(np.fft.rfft(data)))
         
-    spectrum = np.fft.rfft(spec)
-    spectrum.tofile(os.join.path(datpath, 'full-spectrum'), format="text")
+    avgsp = np.mean(np.vstack(allfft), axis=0)
+    sp = avgsp[1:]
+    sp = sp.reshape((smoothing_factor, avgsp.size/smoothing_factor))
+    sp = np.mean(sp, axis=-1)
+
+    f = np.linspace(0, 0.5, sp.size)
+
+    plt.plot(f, sp)
+    plt.show()
+    #spectrum = np.fft.rfft(spec)
+    #spectrum.tofile(os.join.path(datpath, 'full-spectrum'), format="text")
 
 def write(fmean, fmax, fhts, fht10, hmean, hmax, hhts, hht10):
     # write results to file
