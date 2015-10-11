@@ -35,7 +35,15 @@ def main(argv):
     write('mean_synt', 'max_synt', 'hts_synt', 'ht10_synt', smean, smax, shts, sht10)
     """
 
-    hugefft(datpath, sr)
+    sp = hugefft(datpath, sr)
+
+    f = np.linspace(0,0.5,100)
+
+    se = wave_util.genspec()
+
+    import matplotlib.pyplot as plt
+    plt.plot(f,sp,f,se)
+    plt.show()
 
 
 """
@@ -222,7 +230,7 @@ def maximizem(sr):
             
     return emean, emax, ehts, eht10
 
-def hugefft(datpath, sr, smoothing_factor=30):
+def hugefft(datpath, sr, smoothing_factor=100):
     import matplotlib.pyplot as plt
 
     files = sorted(os.listdir(datpath))
@@ -243,12 +251,10 @@ def hugefft(datpath, sr, smoothing_factor=30):
     sp = sp.reshape((smoothing_factor, avgsp.size/smoothing_factor))
     sp = np.mean(sp, axis=-1)
 
-    f = np.linspace(0, 0.5, sp.size)
-
-    plt.plot(f, sp)
-    plt.show()
     #spectrum = np.fft.rfft(spec)
     #spectrum.tofile(os.join.path(datpath, 'full-spectrum'), format="text")
+
+    return sp
 
 def write(fmean, fmax, fhts, fht10, hmean, hmax, hhts, hht10):
     # write results to file

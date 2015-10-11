@@ -140,3 +140,6 @@ def wallops(hs, ts, m, f):
 
     return sp
 
+def genspec(hs=1.5682, ts=3.8296, f=np.linspace(0,0.5,100), foffset=0.055, A=1.3, B=-0.25, C=14):
+    sp = A*hs**2*ts**(-4)*(f+foffset)**(-5)*np.exp(B*(ts*(f+foffset))**(-4))+C
+    return sp
