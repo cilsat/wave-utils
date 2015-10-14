@@ -24,19 +24,20 @@ def main(argv):
     else:
         sr = 2
 
-    """
     # zerodown all files in the data path
     dmean, dmax, dhts, dht10 = zerodown_data(datpath, sr)
     # write zerodown data to the specified files
     write('mean_data', 'max_data', 'hts_data', 'ht10_data', dmean, dmax, dhts, dht10)
     # generate synthetic data from specified measurement data file
-    smean, smax, shts, sht10 = synthetic('hts_data', 0, sr)
+    smean, smax, shts, sht10, data = synthetic('hts_data', 2, sr)
     # write zerodown data to the specified output files
     write('mean_synt', 'max_synt', 'hts_synt', 'ht10_synt', smean, smax, shts, sht10)
+
+
+    #spectrm = perweekfft(datpath, 2.0)
+
     """
-
     sp = hugefft(datpath, sr)
-
     f = np.linspace(0,0.5,100)
 
     se = wave_util.genspec()
@@ -44,6 +45,7 @@ def main(argv):
     import matplotlib.pyplot as plt
     plt.plot(f,sp,f,se)
     plt.show()
+    """
 
 
 """
@@ -144,12 +146,29 @@ def synthetic(hsfile, spectrum, sr):
             hmax.append(max)
             hhts.append(hts)
             hht10.append(ht10)
-            
+
+    # custom spectrum -- based on bert-schneider
+    elif spectrum == 2:
+        for dat in data:
+            index += 1
+            #generate spectrum
+            S = wave_util.genspec(hs=dat[0], ts=dat[1]-1., f=f, foffset=0, A=0.072, C=0)
+
+            E = wave_util.ema(S, 0.5, del_f)
+            mean, max, hts, ht10 = wave_util.zerodown(E, sr)
+            print index, [dat[0] - hts[0], dat[1] - hts[1]]
+            # add to our hourly list
+            #print file, mean, max, hts, ht10
+            hmean.append(mean)
+            hmax.append(max)
+            hhts.append(hts)
+            hht10.append(ht10)
+
     data[:] = np.asarray(data)
     hhts[:] = np.asarray(hhts)
     print np.mean(data), np.mean(hhts)
 
-    return (hmean, hmax, hhts, hht10)
+    return (hmean, hmax, hhts, hht10, data)
 
 """
 generates synthetic data from Hs.Ts pairs
@@ -230,12 +249,35 @@ def maximizem(sr):
             
     return emean, emax, ehts, eht10
 
+def perweekfft(datpath, sr):
+    files = sorted(os.listdir(datpath))
+    allfft = []
+    for file in files[:2184]:
+        with open(os.path.join(datpath, file), 'r') as f:
+            raw = f.read().split('\n')
+
+        # remove first line (header) and any empty lines
+        raw = [r for r in raw[1:] if r]
+        # retrieve elevation data and convert into meters
+        data = [r.split(',')[1].replace('-\.','-0\.') for r in raw]
+        data = np.asarray(data, float)*0.01
+        data -= np.mean(data)
+        allfft.append(np.abs(np.fft.rfft(data)))
+
+    wfft = np.mean(np.vstack(allfft).reshape((13, 168, 3601)), axis=1)
+
+    for n in xrange(wfft.shape[0]):
+        with open('week_' + str(n) + '.sp', 'w') as f:
+            [f.write(str(line) + '\n') for line in wfft[n]]
+
+    return wfft
+
 def hugefft(datpath, sr, smoothing_factor=100):
     import matplotlib.pyplot as plt
 
     files = sorted(os.listdir(datpath))
     allfft = []
-    for file in files[:-1]:
+    for file in files[:2184]:
         with open(os.path.join(datpath, file), 'r') as f:
             raw = f.read().split('\n')
 
